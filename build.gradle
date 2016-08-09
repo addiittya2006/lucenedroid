@@ -1,0 +1,72 @@
+apply plugin: 'java'
+
+sourceCompatibility = 1.7
+
+repositories {
+  mavenCentral()
+  mavenLocal()
+  flatDir { dirs 'libs' }
+}
+
+buildscript {
+    repositories {
+        flatDir dirs: 'libs'
+    }
+    dependencies {
+        classpath ':proguard:'
+    }
+}
+
+dependencies {
+  compile 'org.apache.lucene:lucene-core:5.3.0-mobile-2'
+  compile 'org.apache.lucene:lucene-queryparser:5.3.0-mobile-2'
+  compile 'org.apache.lucene:lucene-analyzers-common:5.3.0-mobile-2'
+  compile 'org.apache.lucene:lucene-suggest:5.3.0-mobile-2'
+  compile 'org.apache.lucene:lucene-highlighter:5.3.0-mobile-2'
+  compile 'org.json:json:20140107'
+
+  // Transient depedencies: if these are not fetched via Maven, we have to list them explicitly.
+  compile 'org.apache.lucene:lucene-join:5.3.0-mobile-2'
+  compile 'org.apache.lucene:lucene-memory:5.3.0-mobile-2'
+  compile 'org.apache.lucene:lucene-misc:5.3.0-mobile-2'
+  compile 'org.apache.lucene:lucene-queries:5.3.0-mobile-2'
+  compile 'org.apache.lucene:lucene-sandbox:5.3.0-mobile-2'
+
+  testCompile 'junit:junit:4.11'
+}
+
+jar {
+  // From http://cmoz.me/blog/2014/11/service-files-uber-jars-and-gradle/
+  doFirst {
+    def serviceDir = file("$buildDir/META-INF/services")
+    serviceDir.deleteDir()
+    serviceDir.mkdirs()
+
+    // copy all service files from deps to buildDir
+    for(file in configurations.runtime) {
+      zipTree(file).matching{ include 'META-INF/services/*' }.each { f ->
+        new File(serviceDir, f.name) << f.getText("UTF-8")
+      }
+    }
+  }
+
+  manifest {
+    attributes "Main-Class": "org.owasp.lucenedroid.Lucene"
+  }
+
+  from(configurations.runtime.collect{ it.isDirectory() ? it : zipTree(it) }) {
+    exclude 'META-INF/**' // Don't let Gradle merge service files
+  }
+
+  // Include service files from the buildDir.
+  from fileTree(buildDir).matching{ include 'META-INF/services/*' }
+}
+
+
+// https://github.com/loopj/proguard-gradle-example
+task proguardJar(type: proguard.gradle.ProGuardTask, dependsOn: jar) {
+    configuration 'proguard-rules.pro'
+    injars jar.archivePath
+    outjars "$jar.destinationDir/lucenestudy-shrunk.jar"
+    printusage "$project.buildDir/deadcode.txt"
+}
